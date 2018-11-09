@@ -91,8 +91,10 @@ int main(int argc, char **argv) {
   }
 
   if (host == NULL) {
-      printf("Default host being used: 192.168.0.8\n");
-      host = "192.168.0.8";
+      printf("Default host being used: localhost\n");
+      //host = "192.168.0.8";
+      // Temporarily set the default host to localhost so I can send/receive
+      host = "localhost";
   }
 
   if (keyString == NULL) {
@@ -100,6 +102,7 @@ int main(int argc, char **argv) {
       keyString = "foobar";
   }
 
+  memset(filterstring, 0, sizeof(filterstring));
   strcat(filterstring, "udp and port ");
   strcat(filterstring, rportString);
   printf("Filter String: %s\n", filterstring);

@@ -9,3 +9,4 @@ Todo:
  - Simple, then advanced
 - Improve process masking by actually going into
   the /proc directory and changing the values
+- Put in configuration files.

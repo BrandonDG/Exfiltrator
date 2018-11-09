@@ -35,11 +35,11 @@ static struct option long_options[] = {
 // Main
 int main(int argc, char **argv) {
     // Allocate variables.
-    int sd, port, send_sd, server_len, rport, opt;
+    int sd, port, send_sd, server_len, rport, opt, len;
     char sbuf[MAXLEN], rbuf[MAXLEN], ebuf[MAXLEN];
     const char *key, *rportString, *sportString, *shost;
     struct sockaddr_in server, client, junk;
-    char command[MAXLEN], *host;
+    char command[MAXLEN], *host, *ptr;
     struct hostent *hp;
     size_t junk_len;
 
@@ -91,12 +91,12 @@ int main(int argc, char **argv) {
     }
 
     if (host == NULL) {
-      printf("Default host being used: 192.168.0.9\n");
-      host = "192.168.0.9";
+      printf("Default host being used: 192.168.0.10\n");
+      host = "192.168.0.10";
     }
 
     if (key == NULL) {
-      printf("Default key being used: 192.168.0.9\n");
+      printf("Default key being used: foobar\n");
       key = "foobar";
     }
 
@@ -134,8 +134,20 @@ int main(int argc, char **argv) {
 
     // Main loop that gets input, packages the command, sends, and receives.
     while (1) {
+        // Clear buffers.
+        memset(rbuf, 0, sizeof(rbuf));
+        memset(sbuf, 0, sizeof(sbuf));
+        memset(ebuf, 0, sizeof(ebuf));
+        memset(command, 0, sizeof(command));
+
         // Get command.
         fgets(command, MAXLEN, stdin);
+
+        ptr = strstr(command, "\n");
+        *ptr = '\0';
+
+        len = strlen(key) + strlen("start[") + strlen("]end") + strlen(command);
+
         // Add key.
         strcat(sbuf, key);
         // Put start string on encryption buffer.
@@ -145,21 +157,32 @@ int main(int argc, char **argv) {
         // Put end string on encryption buffer.
         strcat(ebuf, "]end");
 
+        printf("Encrypt Buffer: %s\n\n\n", ebuf);
+
         // Encrypt.
-        for (int i = 0; i < strlen(ebuf); i++) {
-            ebuf[i] = ebuf[i] + 5;
+        int p_index = 0;
+        for (int i = 0; i < len; i++) {
+            //ebuf[i] = ebuf[i] - 5;
+            int tmp = ebuf[i];
+            tmp = (tmp - PASSWORD[p_index]) * -1;
+            ebuf[i] = tmp;
+            ++p_index;
+            if (p_index == (strlen(PASSWORD) - 1)) { p_index = 0; }
         }
+        printf("Encrypted Buffer: %s\n\n\n", ebuf);
         // Add encrypted payload onto real payload.
         strcat(sbuf, ebuf);
 
+        printf("Sending command\n");
         // Send command.
         junk_len = 0;
         server_len = sizeof(server);
-      	if (sendto(sd, sbuf, MAXLEN, 0, (struct sockaddr *)&server, server_len) == -1) {
+      	if (sendto(sd, sbuf, len, 0, (struct sockaddr *)&server, server_len) == -1) {
       		perror("sendto failure");
       		exit(1);
       	}
 
+        printf("Receiving response\n");
         // Receive response.
         if (recvfrom(sd, rbuf, MAXLEN, 0, (struct sockaddr *)&junk, &junk_len) < 0) {
             perror("Receive failed \n");
@@ -168,10 +191,5 @@ int main(int argc, char **argv) {
 
         // Print reponse.
         printf("From Host: \n%s\n", rbuf);
-
-        // Clear buffers.
-        memset(rbuf, 0, sizeof(rbuf));
-        memset(sbuf, 0, sizeof(sbuf));
-        memset(ebuf, 0, sizeof(ebuf));
     }
 }
