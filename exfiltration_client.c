@@ -10,8 +10,9 @@
 #include <netdb.h>
 #include <pcap.h>
 #include <sys/prctl.h>
+#include <stdio.h>
+#include <string.h>
 #include <unistd.h>
-#include <getopt.h>
 #include "pkt_sniffer.h"
 
 // Define statements.
@@ -23,21 +24,30 @@
 // Function Prototypes
 void packet_handler(u_char *ptrnull, const struct pcap_pkthdr *pkt_info, const u_char *packet);
 
-// Struct required for getopt_long, holding option information.
-static struct option long_options[] = {
-    {"sport",    required_argument, 0, 's'},
-    {"rport",    required_argument, 0, 'r'},
-    {"host",     required_argument, 0, 'h'},
-    {"key",      required_argument, 0, 'k'},
-    {0,         0,                 0, 0}
-};
+/* Old, Malloc wouldn't work within the function.
+void read_config(char *string, char *token) {
+  char *tmp;
+  token = strtok(NULL, ":");
+  string = malloc(sizeof(char) * (strlen(token) + 1));
+  strcpy(string, token);
+  tmp = strstr(string, "\n");
+  *tmp = '\0';
+} */
+
+void read_config(char *string, char *token) {
+  char *tmp;
+  strcpy(string, token);
+  tmp = strstr(string, "\n");
+  *tmp = '\0';
+}
 
 // Main
 int main(int argc, char **argv) {
   // Allocate variables.
-  char errbuf[PCAP_ERRBUF_SIZE], *nic_dev, filterstring[20];
-  char *sportString, *rportString, *host, *keyString;
-  int sd, port, data_size, opt;
+  char errbuf[PCAP_ERRBUF_SIZE], *nic_dev, filterstring[20], fbuf[MAXLEN];
+  char *sportString, *rportString, *host, *keyString, *type, *token;
+  FILE *ccfp;
+  int sd, port, data_size;
   pcap_t *nic_descr;
   bpf_u_int32 netp;
   struct hostent	*hp;
@@ -50,26 +60,32 @@ int main(int argc, char **argv) {
   sportString = rportString = host = keyString = NULL;
   ss = (struct send_struct *) malloc(sizeof(struct send_struct));
 
-  // Get command line arguments.
-  int o_index = 0;
-  while ((opt = getopt_long(argc, argv, OPTIONS, long_options, &o_index)) != -1) {
-    switch (opt) {
-      case 's':
-        sportString = optarg;
-        printf("Send Port Selected: %s\n", optarg);
-      break;
-      case 'r':
-        rportString = optarg;
-        printf("Receive Port Selected: %s\n", optarg);
-      break;
-      case 'h':
-        host = optarg;
-        printf("Host Selected: %s\n", optarg);
-      break;
-      case 'k':
-        keyString = optarg;
-        printf("Key Selected: %s\n", optarg);
-      break;
+  if ((ccfp = fopen("client_config", "r")) == 0) {
+    fprintf(stderr, "Client Configuration File.\n");
+  }
+
+  while (fgets(fbuf, MAXLEN, ccfp)) {
+    token = strtok(fbuf, ":");
+    if (strcmp(token, "rport") == 0) {
+      token = strtok(NULL, ":");
+      rportString = malloc(sizeof(char) * (strlen(token) + 1));
+      read_config(rportString, token);
+    } else if (strcmp(token, "sport") == 0) {
+      token = strtok(NULL, ":");
+      sportString = malloc(sizeof(char) * (strlen(token) + 1));
+      read_config(sportString, token);
+    } else if (strcmp(token, "host") == 0) {
+      token = strtok(NULL, ":");
+      host = malloc(sizeof(char) * (strlen(token) + 1));
+      read_config(host, token);
+    } else if (strcmp(token, "type") == 0) {
+      token = strtok(NULL, ":");
+      type = malloc(sizeof(char) * (strlen(token) + 1));
+      read_config(type, token);
+    } else if (strcmp(token, "key") == 0) {
+      token = strtok(NULL, ":");
+      keyString = malloc(sizeof(char) * (strlen(token) + 1));
+      read_config(keyString, token);
     }
   }
 
@@ -103,9 +119,16 @@ int main(int argc, char **argv) {
   }
 
   memset(filterstring, 0, sizeof(filterstring));
-  strcat(filterstring, "udp and port ");
+  strcat(filterstring, type);
+  strcat(filterstring, " and port ");
   strcat(filterstring, rportString);
-  printf("Filter String: %s\n", filterstring);
+
+  printf("Port to Receive: %s\n", rportString);
+  printf("Port to Send: %s\n", sportString);
+  printf("Host to send to: %s\n", host);
+  printf("Type to send by: %s\n", type);
+  printf("Key to validate: %s\n", keyString);
+  printf("Traffic Filter: %s\n", filterstring);
 
   // Mask the process name to hide its existence.
   memset(argv[0], 0, strlen(argv[0]));
@@ -124,7 +147,7 @@ int main(int argc, char **argv) {
 	}
 
   // Print which NIC we are listening on.
-  printf("Using interface: %s\n\n", nic_dev);
+  printf("Listening on interface: %s\n\n", nic_dev);
 
   // Open NIC.
   nic_descr = pcap_open_live(nic_dev, BUFSIZ, 1, -1, errbuf);

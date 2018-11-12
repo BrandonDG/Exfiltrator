@@ -51,7 +51,6 @@ void packet_handler(u_char *ptrnull, const struct pcap_pkthdr *pkt_info, const u
 	/* Step 3: decrypt the payload by a minus 5 character shift */
   int p_index = 0;
 	for (loop = 0; loop < len; loop++) {
-    //decrypt[loop] = ptr[loop] + 5;
     int tmp = ptr[loop];
     tmp = (tmp * -1) + PASSWORD[p_index];
     decrypt[loop] = (char)tmp;

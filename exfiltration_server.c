@@ -14,7 +14,6 @@
 #include <arpa/inet.h>
 #include <string.h>
 #include <netdb.h>
-#include <getopt.h>
 #include <errno.h>
 
 // Define statements.
@@ -23,48 +22,53 @@
 #define PASSWORD "password"
 #define MAXLEN 65000
 
-// Struct required for getopt_long, holding option information.
-static struct option long_options[] = {
-    {"sport",   required_argument, 0, 's'},
-    {"rport",   required_argument, 0, 'r'},
-    {"host",    required_argument, 0, 'h'},
-    {"key",     required_argument, 0, 'k'},
-    {0,         0,                 0, 0}
-};
+void read_config(char *string, char *token) {
+  char *tmp;
+  strcpy(string, token);
+  tmp = strstr(string, "\n");
+  *tmp = '\0';
+}
 
 // Main
-int main(int argc, char **argv) {
+int main() {
     // Allocate variables.
-    int sd, port, send_sd, server_len, rport, opt, len;
-    char sbuf[MAXLEN], rbuf[MAXLEN], ebuf[MAXLEN];
-    const char *key, *rportString, *sportString, *shost;
+    int sd, port, send_sd, server_len, rport, len;
+    char sbuf[MAXLEN], rbuf[MAXLEN], ebuf[MAXLEN], fbuf[MAXLEN];
+    char *keyString, *rportString, *sportString, *host, *type, *token;
+    FILE *scfp;
     struct sockaddr_in server, client, junk;
-    char command[MAXLEN], *host, *ptr;
+    char command[MAXLEN], *ptr;
     struct hostent *hp;
     size_t junk_len;
 
-    key = rportString = sportString = shost = NULL;
+    keyString = rportString = sportString = host = type = NULL;
 
-    // Get command line arguments.
-    int o_index = 0;
-    while ((opt = getopt_long(argc, argv, OPTIONS, long_options, &o_index)) != -1) {
-      switch (opt) {
-        case 's':
-          sportString = optarg;
-          printf("Send Port Selected: %s\n", optarg);
-        break;
-        case 'r':
-          rportString = optarg;
-          printf("Receive Port Selected: %s\n", optarg);
-        break;
-        case 'h':
-          host = optarg;
-          printf("Host Selected: %s\n", optarg);
-        break;
-        case 'k':
-          key = optarg;
-          printf("Key Selected: %s\n", optarg);
-        break;
+    if ((scfp = fopen("server_config", "r")) == 0) {
+      fprintf(stderr, "Server Configuration File.\n");
+    }
+
+    while (fgets(fbuf, MAXLEN, scfp)) {
+      token = strtok(fbuf, ":");
+      if (strcmp(token, "rport") == 0) {
+        token = strtok(NULL, ":");
+        rportString = malloc(sizeof(char) * (strlen(token) + 1));
+        read_config(rportString, token);
+      } else if (strcmp(token, "sport") == 0) {
+        token = strtok(NULL, ":");
+        sportString = malloc(sizeof(char) * (strlen(token) + 1));
+        read_config(sportString, token);
+      } else if (strcmp(token, "host") == 0) {
+        token = strtok(NULL, ":");
+        host = malloc(sizeof(char) * (strlen(token) + 1));
+        read_config(host, token);
+      } else if (strcmp(token, "type") == 0) {
+        token = strtok(NULL, ":");
+        type = malloc(sizeof(char) * (strlen(token) + 1));
+        read_config(type, token);
+      } else if (strcmp(token, "key") == 0) {
+        token = strtok(NULL, ":");
+        keyString = malloc(sizeof(char) * (strlen(token) + 1));
+        read_config(keyString, token);
       }
     }
 
@@ -95,10 +99,17 @@ int main(int argc, char **argv) {
       host = "192.168.0.10";
     }
 
-    if (key == NULL) {
+    if (keyString == NULL) {
       printf("Default key being used: foobar\n");
-      key = "foobar";
+      keyString = "foobar";
     }
+
+    printf("Port to Receive: %s\n", rportString);
+    printf("Port to Send: %s\n", sportString);
+    printf("Host to send to: %s\n", host);
+    printf("Type to send by: %s\n", type);
+    printf("Key to validate: %s\n", keyString);
+    printf("\n");
 
     // Setup receive socket.
     if ((sd = socket(AF_INET, SOCK_DGRAM, 0)) == -1) {
@@ -146,10 +157,10 @@ int main(int argc, char **argv) {
         ptr = strstr(command, "\n");
         *ptr = '\0';
 
-        len = strlen(key) + strlen("start[") + strlen("]end") + strlen(command);
+        len = strlen(keyString) + strlen("start[") + strlen("]end") + strlen(command);
 
         // Add key.
-        strcat(sbuf, key);
+        strcat(sbuf, keyString);
         // Put start string on encryption buffer.
         strcat(ebuf, "start[");
         // Put command string on encryption buffer.
